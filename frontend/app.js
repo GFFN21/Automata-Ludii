@@ -42,6 +42,7 @@
     activeProject: null,
     activeRuns: [],
     activeTab: "ruleset",
+    assetView: "grid",
     codeIndex: {},
     drafts: {},
     agentBusy: false,
@@ -1189,49 +1190,62 @@
   }
 
   function renderAssets(project) {
-    const composer = "";
     const assets = project.assets || [];
     const editing = state.editing.assets;
-    if (!assets.length && !editing) {
-      return `${composer}<div class="empty">
-        <h3>No visual assets yet.</h3>
-        <p>Ask the agent for a cover direction or a board concept below.</p>
+    const view = state.assetView || "grid";
+    const toolbar = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="display:flex;gap:6px;">
+          <button class="btn small ${view === "grid" ? "primary" : ""}" type="button" data-action="asset-view" data-view="grid" title="Grid view">▦</button>
+          <button class="btn small ${view === "list" ? "primary" : ""}" type="button" data-action="asset-view" data-view="list" title="List view">☰</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="file" id="asset-file-input" multiple style="display:none;" />
+          <button class="btn primary small" type="button" data-action="new-asset" title="Add asset">＋ New asset</button>
+          ${editing ? `<button class="btn small primary" type="button" data-action="save-assets">Save</button>` : `<button class="btn small" type="button" data-action="edit-section" data-section="assets">✎ Edit</button>`}
+          ${editing ? `<button class="btn small" type="button" data-action="cancel-edit" data-section="assets">Cancel</button>` : ""}
+        </div>
+      </div>
+      <div id="asset-dropzone" style="border:2px dashed var(--line);border-radius:12px;padding:12px;margin-bottom:12px;text-align:center;color:var(--muted);font-size:.8rem;">
+        Drag & drop files here to add assets
       </div>`;
+    if (!assets.length && !editing) {
+      return `${toolbar}<div class="empty"><h3>No visual assets yet.</h3><p>Drag files here or use “+ New asset”.</p></div>`;
     }
-
-    const editToggle = `<div style="margin-bottom:10px;"><button class="btn small" type="button" data-action="${editing ? "cancel-edit" : "edit-section"}" data-section="assets">${editing ? "Cancel" : "✎ Edit assets"}</button>${editing ? ` <button class="btn small primary" type="button" data-action="save-assets">Save</button>` : ""}</div>`;
-
-    const cards = assets.map((asset, i) => editing ? `
+    const editToggle = "";
+    const card = (asset, i) => editing ? `
       <article class="asset-card">
-        <div class="asset-preview">${asset.preview_svg || ""}</div>
+        <div class="asset-preview">${asset.storage ? `<img src="/api/assets/${asset.id}/file" alt="" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || "")}</div>
         <div class="asset-body" style="display:flex;flex-direction:column;gap:6px;">
           <input data-asset="${i}" data-field="name" value="${escapeHtml(asset.name)}" placeholder="Name" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
           <input data-asset="${i}" data-field="kind" value="${escapeHtml(asset.kind)}" placeholder="Kind" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
           <input data-asset="${i}" data-field="status" value="${escapeHtml(asset.status)}" placeholder="Status" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
           <input data-asset="${i}" data-field="folder" value="${escapeHtml(asset.folder || "")}" placeholder="Folder (optional)" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
           <textarea data-asset="${i}" data-field="description" rows="2" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.8rem;margin-bottom:8px;">${escapeHtml(asset.description)}</textarea>
-          <label style="font-size:0.7rem;color:var(--muted);">Upload image: <input type="file" accept="image/*" data-asset-img="${i}" /></label>
-          ${asset.image ? `<button type="button" class="btn small" data-action="remove-asset-image" data-asset="${i}">Remove image</button>` : ""}
         </div>
       </article>` : `
       <article class="asset-card">
-        <div class="asset-preview">${asset.image ? `<img src="${escapeHtml(asset.image)}" alt="${escapeHtml(asset.name)}" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || "")}</div>
+        <div class="asset-preview">${asset.storage ? `<img src="/api/assets/${asset.id}/file" alt="${escapeHtml(asset.name)}" style="width:100%;height:auto;display:block;" />` : (asset.image ? `<img src="${escapeHtml(asset.image)}" alt="${escapeHtml(asset.name)}" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || ""))}</div>
         <div class="asset-body">
-          <div class="asset-top">
-            <span class="asset-kind">${escapeHtml(asset.kind)}</span>
-          </div>
+          <div class="asset-top"><span class="asset-kind">${escapeHtml(asset.kind)}</span></div>
           <h3>${escapeHtml(asset.name)}</h3>
           <p class="asset-desc">${escapeHtml(asset.description)}</p>
-          <div class="asset-foot">
-            <span>${escapeHtml(asset.format)} · ${escapeHtml(asset.resolution)}${asset.folder ? " · " + escapeHtml(asset.folder) : ""}</span>
-            <span>${timeAgo(asset.created_at)}</span>
-          </div>
+          <div class="asset-foot"><span>${escapeHtml(asset.format)} · ${escapeHtml(asset.resolution)}${asset.folder ? " · " + escapeHtml(asset.folder) : ""}</span><span>${timeAgo(asset.created_at)}</span></div>
         </div>
-      </article>`).join("");
-
-    return `${editToggle}<div class="asset-grid">${cards}</div>`;
+      </article>`;
+    const cards = assets.map((a,i)=>card(a,i)).join("");
+    if (view === "list") {
+      const rows = assets.map((a,i) => `
+        <div style="display:grid;grid-template-columns:48px 1fr 120px 100px;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--line);">
+          <div style="width:48px;height:48px;overflow:hidden;border-radius:6px;background:var(--soft);">${a.storage ? `<img src="/api/assets/${a.id}/file" style="width:100%;height:100%;object-fit:cover;" />` : (a.preview_svg||"")}</div>
+          <div><strong>${escapeHtml(a.name)}</strong><div style="font-size:.75rem;color:var(--muted);">${escapeHtml(a.description||"")}</div></div>
+          <div style="font-size:.75rem;">${escapeHtml(a.kind)} · ${escapeHtml(a.status)}</div>
+          <div style="font-size:.75rem;color:var(--muted);">${escapeHtml(a.format)}</div>
+        </div>`).join("");
+      return `${toolbar}<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;">${rows}</div>`;
+    }
+    return `${toolbar}<div class="asset-grid">${cards}</div>`;
   }
-
   function renderCode(project) {
     const composer = "";
     const files = project.code || [];
@@ -1913,6 +1927,28 @@
     }
   }
 
+  async function uploadAssetFiles(files) {
+    const project = state.activeProject;
+    if (!project || !files || !files.length) return;
+    for (const file of files) {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("name", file.name);
+      form.append("kind", file.type.startsWith("image/") ? "Image" : "File");
+      try {
+        await fetch(`/api/projects/${encodeURIComponent(project.id)}/assets`, { method: "POST", body: form });
+      } catch (e) {
+        toast(e.message);
+      }
+    }
+    await loadProjects(true);
+    const data = await api(`/projects/${encodeURIComponent(project.id)}`);
+    state.activeProject = data.project;
+    state.activeRuns = data.runs || [];
+    renderProject();
+    toast("Assets uploaded.");
+  }
+
   async function deleteProject(project) {
     if (!confirm(`Delete "${project.name}"? This cannot be undone.`)) return;
     try {
@@ -2342,6 +2378,13 @@
       else if (action === "detect-local") detectLocalModels();
       else if (action === "use-local") useLocalModel();
       else if (action === "ai-suggest") aiSuggest(event.target.dataset.section);
+      else if (action === "asset-view") {
+        state.assetView = event.target.dataset.view || "grid";
+        renderProject();
+      } else if (action === "new-asset") {
+        const input = document.getElementById("asset-file-input");
+        if (input) input.click();
+      }
       else if (action === "toggle-tag") {
         const project = state.activeProject;
         const tag = actionEl.dataset.tag;
@@ -2382,6 +2425,10 @@
       state.codeIndex[project.id] = Number(event.target.value) || 0;
       const panel = $("#tab-panel");
       if (panel) panel.innerHTML = renderTab(project);
+    } else if (event.target.id === "asset-file-input") {
+      const files = event.target.files;
+      if (files && files.length) uploadAssetFiles(files);
+      event.target.value = "";
     } else if (event.target.id === "import-file") {
       const file = event.target.files && event.target.files[0];
       if (file) importProject(file);
@@ -2457,6 +2504,14 @@
     document.addEventListener("submit", onSubmit);
     document.addEventListener("click", onClick);
     document.addEventListener("change", onChange);
+    document.addEventListener("dragover", (e) => { if (state.activeTab === "assets") e.preventDefault(); });
+    document.addEventListener("drop", (e) => {
+      if (state.activeTab !== "assets") return;
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        uploadAssetFiles(e.dataTransfer.files);
+      }
+    });
     document.addEventListener("input", onInput);
     document.addEventListener("keydown", onKeydown);
 
