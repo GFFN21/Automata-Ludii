@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -41,19 +41,48 @@ class Ruleset(BaseModel):
     design_notes: list[str] = Field(default_factory=list)
 
 
+class AssetStorage(BaseModel):
+    backend: str = "local"
+    path: str = ""
+    uri: str = ""
+    size_bytes: int = 0
+    sha256: str = ""
+
+
+class AssetVariant(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("var"))
+    kind: str = "original"
+    format: str = ""
+    mime: str = ""
+    path: str = ""
+    size_bytes: int = 0
+    sha256: str = ""
+
+
 class Asset(BaseModel):
     id: str = Field(default_factory=lambda: new_id("asset"))
+    project_id: str = ""
     name: str
-    kind: str
+    kind: str = "image"
     format: str = "SVG"
+    mime: str = ""
     status: str = "Draft"
     accent: str = "#6C4CF1"
     description: str = ""
     motif: str = "board"
     resolution: str = "300 dpi"
     folder: str = ""
+    tags: list[str] = Field(default_factory=list)
+    collections: list[str] = Field(default_factory=list)
+    storage: AssetStorage | None = None
+    variants: list[AssetVariant] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    references: list[str] = Field(default_factory=list)
+    provenance: dict[str, Any] = Field(default_factory=dict)
     image: str = ""
     created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+    schema_version: int = 1
 
 
 class CodeFile(BaseModel):
@@ -112,7 +141,8 @@ class Project(BaseModel):
     motif: Literal["sun", "wave", "flora", "orbit"]
     progress: dict[str, int]
     ruleset: Ruleset
-    assets: list[Asset] = Field(default_factory=list)
+    assets: list[str] = Field(default_factory=list)
+    schema_version: int = 1
     code: list[CodeFile] = Field(default_factory=list)
     playtests: list[PlaytestReport] = Field(default_factory=list)
     activity: list[Activity] = Field(default_factory=list)

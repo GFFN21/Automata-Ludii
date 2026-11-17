@@ -8,6 +8,7 @@ from typing import Any
 
 from .models import ProviderConfig, PublicSettings, now_iso
 from .seed import seed_projects
+from .storage import read_asset, write_asset, delete_asset_files, data_dir, asset_dir
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("TABLECRAFT_DATA_DIR", ROOT / ".data"))
@@ -41,12 +42,18 @@ PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
 class Store:
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        data_dir()
         if not DB_PATH.exists():
             self._write_db({"projects": [], "runs": {}})
             db = self._read_db()
             db["projects"] = seed_projects()
             self._write_db(db)
+        # migrate legacy embedded assets to file-backed records
+        with self._lock:
+            db = self._read_db()
+            changed = self._migrate_db(db)
+            if changed:
+                self._write_db(db)
 
     def _read_db(self) -> dict[str, Any]:
         with DB_PATH.open("r", encoding="utf-8") as handle:
@@ -57,6 +64,33 @@ class Store:
         with tmp.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, ensure_ascii=False, indent=2)
         tmp.replace(DB_PATH)
+
+    def _migrate_db(self, db: dict[str, Any]) -> bool:
+        changed = False
+        for project in db.get("projects", []):
+            assets = project.get("assets", [])
+            if assets and isinstance(assets[0], dict):
+                new_ids: list[str] = []
+                for asset in assets:
+                    asset = dict(asset)
+                    asset.pop("preview_svg", None)
+                    asset.pop("cover_svg", None)
+                    asset_id = asset.get("id") or f"asset_{__import__('uuid').uuid4().hex[:10]}"
+                    asset["id"] = asset_id
+                    asset.setdefault("project_id", project.get("id", ""))
+                    asset.setdefault("schema_version", 1)
+                    asset.setdefault("created_at", now_iso())
+                    asset.setdefault("updated_at", now_iso())
+                    existing = read_asset(asset_id)
+                    if existing is None:
+                        write_asset(asset)
+                    new_ids.append(asset_id)
+                project["assets"] = new_ids
+                project["schema_version"] = project.get("schema_version", 1)
+                changed = True
+            elif not assets:
+                project.setdefault("schema_version", 1)
+        return changed
 
     def list_projects(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -79,6 +113,7 @@ class Store:
             while project["id"] in used:
                 project["id"] = f"{base_id}-{suffix}"
                 suffix += 1
+            project = self._normalize_project_assets(project["id"], dict(project))
             db["projects"].append(project)
             self._write_db(db)
             return project
@@ -94,11 +129,90 @@ class Store:
             self._write_db(db)
             return True
 
+    def get_asset(self, asset_id: str) -> dict[str, Any] | None:
+        return read_asset(asset_id)
+
+    def create_asset(self, project_id: str, asset: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            project = self.get_project(project_id)
+            if not project:
+                raise KeyError(project_id)
+            asset = dict(asset)
+            asset.pop("preview_svg", None)
+            asset.pop("cover_svg", None)
+            if not asset.get("id"):
+                import uuid
+
+                asset["id"] = f"asset_{uuid.uuid4().hex[:10]}"
+            asset["project_id"] = project_id
+            asset.setdefault("schema_version", 1)
+            asset.setdefault("created_at", now_iso())
+            asset["updated_at"] = now_iso()
+            write_asset(asset)
+            assets = project.get("assets", [])
+            if asset["id"] not in assets:
+                assets.append(asset["id"])
+                project["assets"] = assets
+                self.update_project(project_id, project)
+            return asset
+
+    def update_asset(self, asset_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            current = read_asset(asset_id)
+            if not current:
+                raise KeyError(asset_id)
+            for key, value in patch.items():
+                if key in ("preview_svg", "cover_svg", "id", "project_id"):
+                    continue
+                current[key] = value
+            current["updated_at"] = now_iso()
+            write_asset(current)
+            return current
+
+    def delete_asset(self, asset_id: str) -> bool:
+        with self._lock:
+            record = read_asset(asset_id)
+            if not record:
+                return False
+            # remove from any project
+            for project in self._read_db().get("projects", []):
+                if asset_id in (project.get("assets") or []):
+                    project["assets"] = [a for a in project["assets"] if a != asset_id]
+            db = self._read_db()
+            for project in db.get("projects", []):
+                if asset_id in (project.get("assets") or []):
+                    project["assets"] = [a for a in project["assets"] if a != asset_id]
+            self._write_db(db)
+            delete_asset_files(asset_id)
+            return True
+
+    def _normalize_project_assets(self, project_id: str, project: dict[str, Any]) -> dict[str, Any]:
+        assets = project.get("assets", [])
+        if assets and isinstance(assets[0], dict):
+            new_ids: list[str] = []
+            for asset in assets:
+                asset = dict(asset)
+                asset.pop("preview_svg", None)
+                asset.pop("cover_svg", None)
+                if not asset.get("id"):
+                    import uuid
+
+                    asset["id"] = f"asset_{uuid.uuid4().hex[:10]}"
+                asset["project_id"] = project_id
+                asset.setdefault("schema_version", 1)
+                asset.setdefault("created_at", now_iso())
+                asset["updated_at"] = now_iso()
+                write_asset(asset)
+                new_ids.append(asset["id"])
+            project["assets"] = new_ids
+        return project
+
     def update_project(self, project_id: str, project: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             db = self._read_db()
             for index, current in enumerate(db["projects"]):
                 if current["id"] == project_id:
+                    project = self._normalize_project_assets(project_id, dict(project))
                     project["updated_at"] = now_iso()
                     db["projects"][index] = project
                     self._write_db(db)
@@ -201,7 +315,9 @@ class Store:
 
     def reset_demo_data(self) -> list[dict[str, Any]]:
         with self._lock:
-            self._write_db({"projects": seed_projects(), "runs": {}})
+            db = {"projects": seed_projects(), "runs": {}}
+            self._migrate_db(db)
+            self._write_db(db)
             return self.list_projects()
 
 

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -16,6 +16,7 @@ from .presenter import present_project, present_projects
 from .providers import chat as provider_chat, check_connection
 from .seed import make_project_from_brief
 from .store import store
+from .storage import store_file, resolve_path, guess_mime, MAX_UPLOAD_BYTES
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -159,6 +160,103 @@ async def run_project_agent(project_id: str, payload: RunRequest) -> dict:
         raise HTTPException(status_code=500, detail=f"Agent run failed: {exc}") from exc
     return {"run": run, "project": present_project(project)}
 
+
+@app.get("/api/projects/{project_id}/assets")
+async def list_project_assets(project_id: str) -> dict:
+    project = store.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"assets": [store.get_asset(a) for a in project.get("assets", []) if store.get_asset(a)]}
+
+
+@app.post("/api/projects/{project_id}/assets", status_code=201)
+async def upload_project_asset(
+    project_id: str,
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    kind: str = Form("image"),
+    tags: str = Form(""),
+) -> dict:
+    project = store.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    import uuid
+
+    asset_id = f"asset_{uuid.uuid4().hex[:10]}"
+    stored = store_file(asset_id, file.filename or "upload.bin", content, kind="original")
+    asset = {
+        "id": asset_id,
+        "project_id": project_id,
+        "name": name.strip() or (file.filename or "Untitled asset"),
+        "kind": kind,
+        "format": (file.filename or "").rsplit(".", 1)[-1].upper() if "." in (file.filename or "") else "BIN",
+        "mime": file.content_type or guess_mime(stored["path"]),
+        "status": "Draft",
+        "accent": project.get("accent", "#6C4CF1"),
+        "description": "",
+        "motif": "board",
+        "resolution": "300 dpi",
+        "folder": "",
+        "tags": [t.strip() for t in tags.split(",") if t.strip()],
+        "storage": {
+            "backend": "local",
+            "path": stored["path"],
+            "uri": stored["uri"],
+            "size_bytes": stored["size_bytes"],
+            "sha256": stored["sha256"],
+        },
+        "variants": [],
+        "metadata": {},
+        "references": [],
+        "provenance": {"source": "upload", "original_filename": stored["filename"]},
+    }
+    saved = store.create_asset(project_id, asset)
+    return {"asset": saved}
+
+
+@app.get("/api/assets/{asset_id}")
+async def get_asset(asset_id: str) -> dict:
+    asset = store.get_asset(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {"asset": asset}
+
+
+@app.get("/api/assets/{asset_id}/file")
+async def get_asset_file(asset_id: str, variant: str = "original") -> "FileResponse":
+    from fastapi.responses import FileResponse
+
+    asset = store.get_asset(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    storage = asset.get("storage") or {}
+    rel = storage.get("path", "")
+    if not rel:
+        raise HTTPException(status_code=404, detail="No file for asset")
+    path = resolve_path(rel)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File missing")
+    return FileResponse(path, media_type=asset.get("mime") or guess_mime(str(path)))
+
+
+@app.patch("/api/assets/{asset_id}")
+async def update_asset(asset_id: str, payload: dict) -> dict:
+    try:
+        asset = store.update_asset(asset_id, payload)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {"asset": asset}
+
+
+@app.delete("/api/assets/{asset_id}")
+async def delete_asset(asset_id: str) -> dict:
+    deleted = store.delete_asset(asset_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {"deleted": asset_id}
 
 @app.get("/api/projects/{project_id}/runs")
 async def list_project_runs(project_id: str) -> dict:
