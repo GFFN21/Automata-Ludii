@@ -369,6 +369,25 @@ async def chat_models() -> dict:
     return {"models": [config.model], "default": config.model}
 
 
+def offline_chat_reply(messages: list[dict]) -> str:
+    last = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last = m.get("content", "")
+            break
+    last = (last or "").strip()
+    if not last:
+        return "I'm running in offline mode. Ask me about rulesets, components, or playtest ideas and I'll help with deterministic suggestions."
+    return (
+        "I'm running in offline mode (no model provider available). "
+        "Here's a quick suggestion based on your prompt:\n\n"
+        f"- Break the idea into a clear win condition and 3-5 core actions.\n"
+        f"- List the components you need and their counts.\n"
+        f"- Add one edge case and one balancing note.\n\n"
+        f"You asked: {last[:240]}"
+    )
+
+
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest) -> dict:
     config = store.get_runtime_config()
@@ -376,11 +395,15 @@ async def chat_endpoint(payload: ChatRequest) -> dict:
         reply = await provider_chat(
             config, [m.model_dump() for m in payload.messages], payload.model
         )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Chat failed: {exc}") from exc
-    if not reply:
-        raise HTTPException(status_code=502, detail="Empty response from model")
-    return {"model": payload.model or config.model, "content": reply}
+        if reply:
+            return {"model": payload.model or config.model, "content": reply, "offline": False}
+    except Exception:
+        pass
+    return {
+        "model": "offline-demo",
+        "content": offline_chat_reply([m.model_dump() for m in payload.messages]),
+        "offline": True,
+    }
 
 
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="studio")

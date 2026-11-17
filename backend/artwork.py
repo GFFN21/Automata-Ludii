@@ -167,7 +167,9 @@ def project_cover(project: dict, css_class: str = "project-cover") -> str:
     """
 
 
-def asset_visual(asset: dict, project: dict, css_class: str = "asset-svg") -> str:
+def asset_visual(asset, project: dict, css_class: str = "asset-svg") -> str:
+    if not isinstance(asset, dict):
+        asset = {"name": str(asset), "kind": "Concept sheet", "accent": None}
     accent = _color(asset.get("accent"), _color(project.get("accent"), "#6C4CF1"))
     secondary = _color(project.get("secondary"), "#C4B5FD")
     kind = asset.get("kind", "Concept sheet")
