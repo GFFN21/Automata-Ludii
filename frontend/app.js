@@ -1191,7 +1191,7 @@
 
   function renderAssets(project) {
     const assets = project.assets || [];
-    const editing = state.editing.assets;
+    const editingId = state.editingAsset;
     const view = state.assetView || "grid";
     const toolbar = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
@@ -1202,8 +1202,7 @@
         <div style="display:flex;gap:6px;align-items:center;">
           <input type="file" id="asset-file-input" multiple style="display:none;" />
           <button class="btn primary small" type="button" data-action="new-asset" title="Add asset">＋ New asset</button>
-          ${editing ? `<button class="btn small primary" type="button" data-action="save-assets">Save</button>` : `<button class="btn small" type="button" data-action="edit-section" data-section="assets">✎ Edit</button>`}
-          ${editing ? `<button class="btn small" type="button" data-action="cancel-edit" data-section="assets">Cancel</button>` : ""}
+          
         </div>
       </div>
       <div id="asset-dropzone" style="border:2px dashed var(--line);border-radius:12px;padding:12px;margin-bottom:12px;text-align:center;color:var(--muted);font-size:.8rem;">
@@ -1213,8 +1212,8 @@
       return `${toolbar}<div class="empty"><h3>No visual assets yet.</h3><p>Drag files here or use “+ New asset”.</p></div>`;
     }
     const editToggle = "";
-    const card = (asset, i) => editing ? `
-      <article class="asset-card">
+    const card = (asset, i) => (editingId === asset.id) ? `
+      <article class="asset-card" data-action="edit-asset" data-id="${asset.id}" style="cursor:pointer;">
         <div class="asset-preview">${asset.storage ? `<img src="/api/assets/${asset.id}/file" alt="" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || "")}</div>
         <div class="asset-body" style="display:flex;flex-direction:column;gap:6px;">
           <input data-asset="${i}" data-field="name" value="${escapeHtml(asset.name)}" placeholder="Name" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
@@ -1224,7 +1223,7 @@
           <textarea data-asset="${i}" data-field="description" rows="2" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.8rem;margin-bottom:8px;">${escapeHtml(asset.description)}</textarea>
         </div>
       </article>` : `
-      <article class="asset-card">
+      <article class="asset-card" data-action="edit-asset" data-id="${asset.id}" style="cursor:pointer;">
         <div class="asset-preview">${asset.storage ? `<img src="/api/assets/${asset.id}/file" alt="${escapeHtml(asset.name)}" style="width:100%;height:auto;display:block;" />` : (asset.image ? `<img src="${escapeHtml(asset.image)}" alt="${escapeHtml(asset.name)}" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || ""))}</div>
         <div class="asset-body">
           <div class="asset-top"><span class="asset-kind">${escapeHtml(asset.kind)}</span></div>
@@ -2384,6 +2383,28 @@
       } else if (action === "new-asset") {
         const input = document.getElementById("asset-file-input");
         if (input) input.click();
+      } else if (action === "edit-asset") {
+        state.editingAsset = actionEl.dataset.id;
+        renderProject();
+      } else if (action === "cancel-asset-edit") {
+        state.editingAsset = null;
+        renderProject();
+      } else if (action === "save-asset") {
+        const project = state.activeProject;
+        const id = actionEl.dataset.id;
+        const assets = project.assets || [];
+        const asset = assets.find(a => a.id === id);
+        if (asset) {
+          document.querySelectorAll(`[data-asset]`).forEach(el => {
+            const i = Number(el.dataset.asset);
+            if (assets[i] && assets[i].id === id) {
+              const field = el.dataset.field;
+              if (field) assets[i][field] = el.value;
+            }
+          });
+        }
+        state.editingAsset = null;
+        saveProject(project);
       }
       else if (action === "toggle-tag") {
         const project = state.activeProject;
