@@ -1,0 +1,6 @@
+# Tablecraft runtime data. API keys are stored here when entered in the UI.
+.data/
+*.pyc
+__pycache__/
+.venv/
+.DS_Store
