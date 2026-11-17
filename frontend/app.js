@@ -50,7 +50,9 @@
     toastTimer: null,
     pendingScroll: "",
   };
-
+ 
+  const KNOWN_TAGS = ["strategy","cooperative","competitive","deck-building","worker-placement","dice","card-game","family","party","solo","2-player","engine-building","area-control","tile-placement","racing","puzzle","legacy","dexterity","bluffing","negotiation","trading","exploration","adventure","fantasy","sci-fi","historical","nature","horror","cozy","minimalist","print-and-play","quick","long"];
+ 
   const $ = (selector, scope = document) => scope.querySelector(selector);
 
   /* ------------------------------ utilities ------------------------------ */
@@ -987,7 +989,7 @@
               <button class="btn small primary" type="button" data-action="save-title">Save</button>
               <button class="btn small" type="button" data-action="cancel-edit" data-section="title">Cancel</button>
             </div>` : `
-            <h1 class="project-title" style="margin:6px 0 8px;">${escapeHtml(project.name)} <button class="btn small" type="button" data-action="edit-section" data-section="title" title="Edit title" style="vertical-align:middle;">✎</button></h1>`}
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 8px;width:100%;"><h1 class="project-title" style="margin:0;min-width:0;flex:1;">${escapeHtml(project.name)}</h1><div style="display:flex;gap:6px;flex-shrink:0;"> <button class="btn small" type="button" data-action="edit-section" data-section="title" title="Edit title">✎</button><button class="btn small" type="button" data-action="ai-suggest" data-section="title" title="AI improve">✨ AI</button></div></div>`}
           <div class="meta-row" style="margin:4px 0 0;">
             <span class="meta-pill">${escapeHtml(project.genre)}</span>
             <span class="meta-pill">${escapeHtml(project.players)} players</span>
@@ -1059,27 +1061,36 @@
             <div class="field"><label>Playtime</label><input id="edit-playtime" value="${escapeHtml(project.playtime)}" /></div>
             <div class="field"><label>Age</label><input id="edit-age" value="${escapeHtml(project.age)}" /></div>
           </div>
-          <div class="field"><label>Tags (comma separated)</label><input id="edit-tags" value="${escapeHtml((project.tags || []).join(", "))}" placeholder="e.g. cozy, strategic, 2-player" /></div>
+
           <div class="form-actions" style="margin-top:10px;">
             <button class="btn primary small" type="button" data-action="save-summary">Save</button>
             <button class="btn small" type="button" data-action="cancel-edit" data-section="summary">Cancel</button>
           </div>
         ` : `
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;width:100%;">
             <span class="kicker">README.md</span>
-            <button class="btn small" type="button" data-action="edit-section" data-section="summary" title="Edit" style="vertical-align:middle;">✎ Edit</button>
+            <button class="btn small" type="button" data-action="edit-section" data-section="summary" title="Edit" style="vertical-align:middle;">✎ Edit</button> <button class="btn small" type="button" data-action="ai-suggest" data-section="description" title="AI improve" style="vertical-align:middle;">✨ AI</button>
           </div>
           <div style="margin-bottom:12px;">
-            <span class="kicker" style="display:block;margin-bottom:6px;">Tags</span>
-            <div class="meta-row" style="margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-              ${(project.tags || []).map(t => `<span class="meta-pill" style="display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);color:var(--accent-strong);padding:2px 8px;line-height:1.2;">${escapeHtml(t)} <button type="button" data-action="remove-tag" data-tag="${escapeHtml(t)}" style="background:none;border:none;cursor:pointer;color:var(--accent-strong);padding:0;font-size:0.7rem;line-height:1;vertical-align:middle;">×</button></span>`).join("")}
-              <button class="btn small" type="button" data-action="add-tag" title="Add tag" style="padding:2px 8px;">+ tag</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span class="kicker" style="display:block;">Tags</span>
+              <button class="btn small" type="button" data-action="${state.editing.tags ? "cancel-edit" : "edit-section"}" data-section="tags" style="vertical-align:middle;">${state.editing.tags ? "Cancel" : "✎ Edit tags"}</button>
             </div>
-            <div id="tag-input-wrap" style="display:none;margin-top:6px;">
-              <input id="new-tag-input" placeholder="Type a tag and press Enter" style="padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:0.8rem;width:240px;" />
-            </div>
+            ${state.editing.tags ? `
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+                ${KNOWN_TAGS.map(t => `<button type="button" class="btn small" data-action="toggle-tag" data-tag="${t}" style="padding:2px 8px;${(project.tags||[]).includes(t) ? 'background:var(--accent);color:#fff;' : ''}">${t}</button>`).join("")}
+              </div>
+              <div class="form-actions" style="margin-top:6px;">
+                <button class="btn primary small" type="button" data-action="save-tags">Save tags</button>
+              </div>
+            ` : `
+              <div class="meta-row" style="margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                ${(project.tags || []).map(t => `<span class="meta-pill" style="display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);color:var(--accent-strong);padding:2px 8px;line-height:1.2;">${t}</span>`).join("")}
+                ${(project.tags || []).length ? "" : `<span class="muted" style="font-size:.75rem;">No tags yet.</span>`}
+              </div>
+            `}
           </div>
-          <div class="md-viewer">${markdown(project.description)}</div>
+                      <div class="md-viewer">${markdown(project.description)}</div>
         `}
       </div>
 
@@ -1140,7 +1151,7 @@
 
     const loglineHtml = editing
       ? `<h2 style="color:#f8f6fd;">${escapeHtml(rules.logline || project.tagline)}</h2>`
-      : `<h2>${escapeHtml(rules.logline || project.tagline)} <button class="btn small" type="button" data-action="edit-section" data-section="ruleset" title="Edit" style="vertical-align:middle;background:transparent;border-color:#463b5e;color:#b9adcd;">✎</button></h2>`;
+      : `<h2>${escapeHtml(rules.logline || project.tagline)} <button class="btn small" type="button" data-action="edit-section" data-section="ruleset" title="Edit" style="vertical-align:middle;background:transparent;border-color:#463b5e;color:#b9adcd;">✎</button> <button class="btn small" type="button" data-action="ai-suggest" data-section="ruleset" title="AI improve" style="vertical-align:middle;background:transparent;border-color:#463b5e;color:#b9adcd;">✨</button></h2>`;
 
     return `
       <div style="margin-bottom:12px;">
@@ -1175,6 +1186,7 @@
   }
 
   function renderAssets(project) {
+    const composer = "";
     const assets = project.assets || [];
     const editing = state.editing.assets;
     if (!assets.length && !editing) {
@@ -1218,6 +1230,7 @@
   }
 
   function renderCode(project) {
+    const composer = "";
     const files = project.code || [];
     const editing = state.editing.code;
     if (!files.length && !editing) {
@@ -1844,6 +1857,59 @@
     renderProject();
   }
 
+  async function showProposal(section, current, suggestion) {
+    let panel = document.getElementById("ai-proposal");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "ai-proposal";
+      panel.style.cssText = "position:fixed;right:20px;bottom:20px;width:420px;max-height:70vh;overflow:auto;background:#fff;border:1px solid #d8d0e8;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:14px;z-index:9999;";
+      document.body.appendChild(panel);
+    }
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong>AI proposal — ${escapeHtml(section)}</strong>
+        <button class="btn small" type="button" id="ai-proposal-close">✕</button>
+      </div>
+      <div style="font-size:.75rem;margin-bottom:6px;color:#666;">Current:</div>
+      <div style="background:#fdecea;padding:8px;border-radius:6px;font-size:.8rem;margin-bottom:8px;">- ${escapeHtml(current || "(empty)")}</div>
+      <div style="font-size:.75rem;margin-bottom:6px;color:#666;">Proposed:</div>
+      <div style="background:#eaf7ea;padding:8px;border-radius:6px;font-size:.8rem;margin-bottom:12px;">+ ${escapeHtml(suggestion)}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn small" type="button" id="ai-proposal-reject">Reject</button>
+        <button class="btn primary small" type="button" id="ai-proposal-approve">Approve</button>
+      </div>`;
+    document.getElementById("ai-proposal-close").onclick = () => panel.remove();
+    document.getElementById("ai-proposal-reject").onclick = () => panel.remove();
+    document.getElementById("ai-proposal-approve").onclick = async () => {
+      const project = state.activeProject;
+      if (!project) return;
+      if (section === "title") project.name = suggestion;
+      else if (section === "summary") project.tagline = suggestion;
+      else if (section === "description") project.description = suggestion;
+      else if (section === "ruleset") {
+        project.ruleset = project.ruleset || {};
+        project.ruleset.logline = suggestion;
+      }
+      await saveProject(project);
+      panel.remove();
+    };
+  }
+
+  async function aiSuggest(section) {
+    const project = state.activeProject;
+    if (!project) return;
+    toast("Generating AI suggestion…");
+    try {
+      const data = await api(`/projects/${encodeURIComponent(project.id)}/ai/suggest`, {
+        method: "POST",
+        body: JSON.stringify({ section, instruction: "" }),
+      });
+      showProposal(section, data.current, data.suggestion);
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
   async function deleteProject(project) {
     if (!confirm(`Delete "${project.name}"? This cannot be undone.`)) return;
     try {
@@ -2203,7 +2269,7 @@
         if (players) project.players = players.value;
         if (playtime) project.playtime = playtime.value;
         if (age) project.age = age.value;
-        if (tags) project.tags = tags.value.split(",").map(s => s.trim()).filter(Boolean);
+
         delete state.editing.summary;
         saveProject(project);
       } else if (action === "remove-asset-image") {
@@ -2272,6 +2338,19 @@
       else if (action === "test-connection") testConnection();
       else if (action === "detect-local") detectLocalModels();
       else if (action === "use-local") useLocalModel();
+      else if (action === "ai-suggest") aiSuggest(event.target.dataset.section);
+      else if (action === "toggle-tag") {
+        const project = state.activeProject;
+        const tag = actionEl.dataset.tag;
+        project.tags = project.tags || [];
+        const idx = project.tags.indexOf(tag);
+        if (idx >= 0) project.tags.splice(idx, 1); else project.tags.push(tag);
+        renderProject();
+      } else if (action === "save-tags") {
+        const project = state.activeProject;
+        delete state.editing.tags;
+        saveProject(project);
+      }
       else if (action === "delete-key") deleteKey();
       else if (action === "reset-demo") resetDemo();
       else if (action === "reload") window.location.reload();

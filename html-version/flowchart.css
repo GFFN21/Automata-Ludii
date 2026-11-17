@@ -1,0 +1,68 @@
+/* Flowchart editor styles — Tablecraft (purple/white) */
+.fc-root { width: 100%; height: 100%; position: relative; overflow: hidden; font-family: "Roboto", system-ui, sans-serif; }
+
+.fc-viewport {
+  flex: 1; height: 100%; position: relative; overflow: hidden; cursor: grab;
+  background-color: #fafafa;
+  background-image: radial-gradient(#9c93af 1.5px, transparent 1.5px);
+  background-size: 20px 20px;
+}
+.fc-viewport.panning { cursor: grabbing; }
+
+.fc-canvas-content { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+
+.fc-svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
+.fc-shape {
+  position: absolute; background: #ffffff; border: 2px solid #343a40;
+  display: flex; justify-content: center; align-items: center;
+  cursor: move; box-shadow: 0 2px 8px rgba(0,0,0,0.05); z-index: 10;
+  user-select: none;
+}
+.fc-shape.selected { border-color: #6c4cf1; box-shadow: 0 0 0 3px rgba(108,76,241,0.25); }
+.fc-shape.connecting-target { border-color: #1d7a4c; box-shadow: 0 0 0 3px rgba(29,122,76,0.3); }
+.fc-shape-rect { border-radius: 2px; }
+.fc-shape-rounded { border-radius: 16px; }
+.fc-shape-circle { border-radius: 50%; }
+.fc-shape-diamond { transform: rotate(45deg); }
+.fc-shape-diamond-inner { transform: rotate(-45deg); width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+.fc-shape-hexagon { border: none !important; background: transparent !important; box-shadow: none !important; }
+.fc-shape-hexagon-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.fc-shape-hexagon-svg polygon { fill: #ffffff; stroke: #343a40; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.fc-shape.selected.fc-shape-hexagon .fc-shape-hexagon-svg polygon { stroke: #6c4cf1; stroke-width: 3; }
+
+.fc-resize-handle { position: absolute; width: 8px; height: 8px; background: #ffffff; border: 1px solid #6c4cf1; border-radius: 2px; z-index: 20; display: none; }
+.fc-shape.selected .fc-resize-handle { display: block; }
+.fc-resize-handle.nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.fc-resize-handle.ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.fc-resize-handle.sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.fc-resize-handle.se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+.fc-editable-text { outline: none; border: none; background: transparent; text-align: center; font-size: 13px; color: #171320; width: 80%; word-wrap: break-word; cursor: text; user-select: text; z-index: 12; font-family: "Lexend", sans-serif; }
+
+.fc-connector-path { stroke: #495057; stroke-width: 2; fill: none; pointer-events: visibleStroke; cursor: pointer; }
+.fc-connector-path.selected { stroke: #6c4cf1; stroke-width: 3; }
+
+.fc-connection-label { position: absolute; background: #ffffff; border: 1px solid #d7d2e4; border-radius: 4px; padding: 2px 6px; font-size: 11px; color: #433d52; transform: translate(-50%, -50%); z-index: 11; cursor: text; box-shadow: 0 1px 4px rgba(0,0,0,0.05); font-family: "Lexend", sans-serif; }
+.fc-connection-label:focus { outline: 1px solid #6c4cf1; border-color: #6c4cf1; }
+
+.fc-sidebar { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 50px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 10px; z-index: 1000; border: 1px solid #e8e5f0; }
+.fc-tool-btn { width: 38px; height: 38px; border-radius: 8px; border: 1px solid #e8e5f0; background: #ffffff; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: all 0.15s ease; }
+.fc-tool-btn:hover, .fc-tool-btn.active { background: #efebff; border-color: #6c4cf1; }
+.fc-tool-btn svg { width: 20px; height: 20px; fill: none; stroke: #433d52; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.fc-zoom-indicator { position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.9); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #433d52; box-shadow: 0 2px 8px rgba(0,0,0,0.08); pointer-events: none; z-index: 1000; border: 1px solid #e8e5f0; font-family: "Lexend", sans-serif; }
+
+.fc-json-panel { width: 320px; height: 100%; background: #ffffff; color: #171320; display: flex; flex-direction: column; z-index: 1001; border-right: 1px solid #e8e5f0; box-shadow: 2px 0 12px rgba(0,0,0,0.05); transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1); }
+.fc-json-panel.collapsed { margin-left: -320px; }
+.fc-panel-header { padding: 12px 16px; background: #f8f7fb; border-bottom: 1px solid #e8e5f0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: #433d52; font-family: "Lexend", sans-serif; }
+.fc-btn-apply { background: #6c4cf1; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: "Lexend", sans-serif; }
+.fc-btn-apply:hover { background: #5a38e8; }
+.fc-btn-toggle { position: absolute; left: 320px; top: 14px; background: #ffffff; border: 1px solid #e8e5f0; border-left: none; border-radius: 0 6px 6px 0; padding: 6px 10px; font-size: 12px; font-weight: 600; color: #433d52; cursor: pointer; box-shadow: 3px 0 8px rgba(0,0,0,0.05); transition: left 0.25s cubic-bezier(0.4,0,0.2,1); z-index: 1002; font-family: "Lexend", sans-serif; }
+.fc-json-panel.collapsed + .fc-btn-toggle { left: 0; }
+.fc-json-editor { flex: 1; width: 100%; background: #f8f7fb; color: #171320; border: none; padding: 14px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.4; resize: none; outline: none; white-space: pre; }
+.fc-title-section { background: #ffffff; padding: 16px 24px; border-bottom: 1px solid #e8e5f0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); z-index: 1005; display: flex; flex-direction: column; gap: 4px; }
+.fc-title-section h1 { font-size: 20px; font-weight: 700; color: #171320; font-family: "Lexend", sans-serif; margin: 0; }
+.fc-title-section p { font-size: 13px; color: #6f6980; margin: 0; }
+.fc-editor-section { flex: 1; position: relative; display: flex; overflow: hidden; min-height: 520px; border: 1px solid #e8e5f0; border-radius: 12px; }
+.fc-page { display: flex; flex-direction: column; gap: 12px; }

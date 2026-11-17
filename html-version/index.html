@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Tablecraft — Board game design studio</title>
+  <meta name="description" content="A studio agent for board game rulesets, visuals, and virtual playtests." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css?v=0.5.14" />
+  <link rel="stylesheet" href="/flowchart.css?v=2" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/">
+        <span class="brand-token" aria-hidden="true"></span>
+        <span class="brand-copy">
+          <span class="brand-name">Tablecraft</span>
+          <span class="brand-sub">Game studio</span>
+        </span>
+      </a>
+
+      <a class="new-game" href="#/new">
+        <span>New game</span><span class="new-game-plus" aria-hidden="true">＋</span>
+      </a>
+
+      <div class="side-label">Workspace</div>
+      <nav class="side-nav" aria-label="Workspace">
+        <a href="#/" data-nav="studio">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
+          </span>
+          <span>Studio</span>
+        </a>
+        <a href="#/projects" data-nav="projects">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4"/></svg>
+          </span>
+          <span>Projects</span>
+        </a>
+        <a href="#/chat" data-nav="chat">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v10H7l-3 3V5z"/></svg>
+          </span>
+          <span>Chat</span>
+        </a>
+        <a href="#/settings" data-nav="settings">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></svg>
+          </span>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+      <div class="side-spacer"></div>
+
+      <div class="side-label side-label-agents">Agents</div>
+      <nav class="side-nav agent-nav" aria-label="Agents">
+        <a href="#/settings" data-scroll="framework">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.4"/></svg>
+          </span>
+          <span>Agent runtime</span>
+        </a>
+        <a href="#/settings" data-scroll="providers">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </span>
+          <span>Model providers</span>
+        </a>
+      </nav>
+
+      <div class="side-status">
+        <div class="side-status-line">
+          <span id="side-dot" class="dot"></span>
+          <span id="side-status-label">Connecting…</span>
+        </div>
+        <div id="side-provider" class="side-status-meta">Studio API</div>
+        <div class="side-footer">Strengthening ideas before they reach the table.<br />v0.4 · local studio</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <nav id="crumbs" class="crumbs" aria-label="Breadcrumb"></nav>
+          <div class="top-actions">
+            <span class="api-pill"><span id="top-dot" class="dot"></span><span id="top-api-label">Connecting…</span></span>
+            <span class="shortcut" aria-hidden="true">⌘ K</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="workspace-row">
+        <div id="view" class="view"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="/flowchart.js?v=2"></script>
+  <script src="/app.js?v=0.5.14"></script>
+</body>
+</html>

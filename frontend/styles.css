@@ -1402,9 +1402,10 @@ button { font: inherit; cursor: pointer; }
 
 /* ---------- markdown viewer (summary) ---------- */
 .md-viewer { font-size: 0.9rem; line-height: 1.7; color: var(--ink-soft); }
-.md-viewer h2 { font-size: 1.35rem; margin: 16px 0 6px; color: var(--ink); }
-.md-viewer h3 { font-size: 1.15rem; margin: 14px 0 4px; color: var(--ink); }
-.md-viewer h4 { font-size: 1rem; margin: 12px 0 4px; color: var(--ink); }
+.md-viewer h2 { font-size: 1.35rem; margin: 28px 0 10px; color: var(--ink); }
+.md-viewer h3 { font-size: 1.15rem; margin: 24px 0 8px; color: var(--ink); }
+.md-viewer h4 { font-size: 1rem; margin: 20px 0 6px; color: var(--ink); }
+.md-viewer h2:first-child, .md-viewer h3:first-child, .md-viewer h4:first-child { margin-top: 0; }
 .md-viewer p { margin: 0 0 0.8em; }
 .md-viewer ul, .md-viewer ol { margin: 0.4em 0 0.8em 1.4em; }
 .md-viewer li { margin-bottom: 0.3em; }

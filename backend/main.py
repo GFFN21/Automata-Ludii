@@ -46,6 +46,11 @@ class ChatRequest(BaseModel):
     model: str | None = None
 
 
+class AISuggestRequest(BaseModel):
+    section: str
+    instruction: str = ""
+
+
 class SettingsUpdate(BaseModel):
     provider: Literal["openai", "anthropic", "google", "local"] = "openai"
     model: str = Field(default="gpt-4.1-mini", max_length=200)
@@ -258,6 +263,64 @@ async def delete_asset(asset_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {"deleted": asset_id}
 
+@app.post("/api/projects/{project_id}/ai/suggest")
+async def ai_suggest(project_id: str, payload: AISuggestRequest) -> dict:
+    project = store.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    config = store.get_runtime_config()
+    section = payload.section
+    instruction = payload.instruction.strip()
+    rules = project.get("ruleset", {})
+    if section == "title":
+        current = project.get("name", "")
+        prompt = f"Propose a better project title for this board game. Current title: {current!r}. Brief: {project.get('description','')}. Return only the new title, no quotes."
+    elif section == "summary":
+        current = project.get("tagline", "")
+        prompt = f"Propose a sharper one-sentence tagline. Current: {current!r}. Game: {project.get('name')} — {project.get('description','')}. Return only the new tagline."
+    elif section == "ruleset":
+        current = rules.get("logline", "") or project.get("tagline", "")
+        prompt = f"Propose a concise rules logline. Current: {current!r}. Include core loop and tension. Return only the logline."
+    elif section == "description":
+        current = project.get("description", "")
+        prompt = f"Rewrite and improve this game description in Markdown. Keep it concise and engaging. Current: {current!r}. Return only the new description."
+    else:
+        current = ""
+        prompt = f"Improve the {section} section. {instruction}"
+    if instruction:
+        prompt += f"\nAdditional guidance: {instruction}"
+    messages = [{"role": "system", "content": "You are a board game design assistant. Be concise."}, {"role": "user", "content": prompt}]
+    reply = None
+    try:
+        reply = await provider_chat(config, messages, None)
+    except Exception:
+        pass
+    if not reply:
+        # try local Ollama
+        import httpx
+
+        for base_url in ("http://localhost:11434", "http://127.0.0.1:11434", config.base_url):
+            if not base_url:
+                continue
+            try:
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    r = await client.get(f"{base_url.rstrip('/')}/api/tags")
+                    r.raise_for_status()
+                    models = [m.get("name") for m in r.json().get("models", []) if m.get("name")]
+                if not models:
+                    continue
+                from .models import ProviderConfig
+
+                local_config = ProviderConfig(provider="local", model=models[0], base_url=base_url)
+                reply = await provider_chat(local_config, messages, None)
+                if reply:
+                    break
+            except Exception:
+                continue
+    if not reply:
+        reply = f"{current} (AI suggestion unavailable offline)"
+    return {"section": section, "current": current, "suggestion": clean_ai_text(reply)}
+
 @app.get("/api/projects/{project_id}/runs")
 async def list_project_runs(project_id: str) -> dict:
     if not store.get_project(project_id):
@@ -386,6 +449,25 @@ async def chat_models() -> dict:
     if config.provider == "local":
         return {"models": [], "default": config.model, "provider": "local", "base_url": config.base_url}
     return {"models": [config.model], "default": config.model, "provider": config.provider, "base_url": config.base_url}
+
+
+def clean_ai_text(text: str) -> str:
+    if not text:
+        return ""
+    text = text.strip()
+    # Remove markdown code fences if the model wrapped the answer.
+    if text.startswith("```"):
+        lines = text.splitlines()
+        # drop first fence line
+        lines = lines[1:]
+        # drop trailing fence
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    # Remove a leading language tag line like "markdown"
+    if text.lower().startswith("markdown\n"):
+        text = text[len("markdown\n"):].strip()
+    return text.strip()
 
 
 def offline_chat_reply(messages: list[dict]) -> str:
