@@ -1197,15 +1197,16 @@
     const view = state.assetView || "grid";
     const toolbar = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-        <div style="display:flex;gap:6px;">
-          <button class="btn small ${view === "grid" ? "primary" : ""}" type="button" data-action="asset-view" data-view="grid" title="Grid view">▦</button>
-          <button class="btn small ${view === "list" ? "primary" : ""}" type="button" data-action="asset-view" data-view="list" title="List view">☰</button>
+        <div style="display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;">
+          <button class="btn small" type="button" data-action="asset-view" data-view="grid" title="Grid view" style="border:none;border-radius:0;${view === "grid" ? "background:var(--accent);color:#fff;" : ""}">▦</button>
+          <div style="width:1px;background:var(--line-strong);"></div>
+          <button class="btn small" type="button" data-action="asset-view" data-view="list" title="List view" style="border:none;border-radius:0;${view === "list" ? "background:var(--accent);color:#fff;" : ""}">☰</button>
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
           <input type="file" id="asset-file-input" multiple style="display:none;" />
           <div style="position:relative;display:inline-block;">
-            <button class="btn primary small" type="button" data-action="toggle-asset-menu" title="Add">＋</button>
-            ${state.assetMenuOpen ? `<div style="position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);padding:6px;display:flex;flex-direction:column;gap:4px;z-index:10;">
+            <button class="btn primary" type="button" data-action="toggle-asset-menu" title="Add" style="width:40px;height:40px;border-radius:50%;font-size:1.4rem;line-height:1;padding:0;">＋</button>
+            ${state.assetMenuOpen ? `<div style="position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);padding:8px;display:flex;flex-direction:column;gap:8px;z-index:10;min-width:140px;">
               <button class="btn small" type="button" data-action="new-file-asset">New file</button>
               <button class="btn small" type="button" data-action="new-folder-asset">New folder</button>
               <button class="btn small" type="button" data-action="import-file-asset">Import file</button>
@@ -1217,7 +1218,7 @@
       <div id="asset-dropzone" style="border:2px dashed var(--line);border-radius:12px;padding:12px;margin-bottom:12px;text-align:center;color:var(--muted);font-size:.8rem;">
         Drag & drop files here to add assets
       </div>`;
-    if (!assets.length && !editing) {
+    if (!assets.length && !editingId) {
       return `${toolbar}<div class="empty"><h3>No visual assets yet.</h3><p>Drag files here or use “+ New asset”.</p></div>`;
     }
     const editToggle = "";
@@ -1225,7 +1226,7 @@
       <article class="asset-card" data-action="edit-asset" data-id="${asset.id}" style="cursor:pointer;">
         <div class="asset-preview">${asset.storage ? `<img src="/api/assets/${asset.id}/file" alt="" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || "")}</div>
         <div class="asset-body" style="display:flex;flex-direction:column;gap:6px;position:relative;">
-          <button type="button" data-action="delete-asset" data-id="${asset.id}" style="position:absolute;top:0;right:0;background:none;border:none;cursor:pointer;font-size:1rem;color:#a32253;">✕</button>
+          <button type="button" data-action="delete-asset" data-id="${asset.id}" style="position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#fff;border:1px solid #d0d0d0;cursor:pointer;font-size:0.85rem;color:#888;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.15);">✕</button>
           <input data-asset="${i}" data-field="name" value="${escapeHtml(asset.name)}" placeholder="Name" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
           <select data-asset="${i}" data-field="kind" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;">
             ${["card deck","card","concept art","box art","board","player board","3d piece","icon set","icon","thematic art","other"].map(k => `<option value="${k}" ${asset.kind===k?"selected":""}>${k}</option>`).join("")}
@@ -2396,8 +2397,13 @@
         renderProject();
       } else if (action === "new-file-asset") {
         state.assetMenuOpen = false;
-        const input = document.getElementById("asset-file-input");
-        if (input) input.click();
+        const project = state.activeProject;
+        if (project) {
+          api(`/projects/${encodeURIComponent(project.id)}/assets/create`, { method: "POST", body: JSON.stringify({ name: "New asset", kind: "other", format: "BIN" }) })
+            .then(() => api(`/projects/${encodeURIComponent(project.id)}`))
+            .then(data => { state.activeProject = data.project; state.activeRuns = data.runs || []; renderProject(); })
+            .catch(e => toast(e.message));
+        }
       } else if (action === "import-file-asset") {
         state.assetMenuOpen = false;
         const input = document.getElementById("asset-file-input");
