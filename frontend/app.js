@@ -43,6 +43,8 @@
     activeRuns: [],
     activeTab: "ruleset",
     assetView: "grid",
+    assetMenuOpen: false,
+    editingAsset: null,
     codeIndex: {},
     drafts: {},
     agentBusy: false,
@@ -1201,7 +1203,14 @@
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
           <input type="file" id="asset-file-input" multiple style="display:none;" />
-          <button class="btn primary small" type="button" data-action="new-asset" title="Add asset">＋ New asset</button>
+          <div style="position:relative;display:inline-block;">
+            <button class="btn primary small" type="button" data-action="toggle-asset-menu" title="Add">＋</button>
+            ${state.assetMenuOpen ? `<div style="position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);padding:6px;display:flex;flex-direction:column;gap:4px;z-index:10;">
+              <button class="btn small" type="button" data-action="new-file-asset">New file</button>
+              <button class="btn small" type="button" data-action="new-folder-asset">New folder</button>
+              <button class="btn small" type="button" data-action="import-file-asset">Import file</button>
+            </div>` : ""}
+          </div>
           
         </div>
       </div>
@@ -1215,10 +1224,12 @@
     const card = (asset, i) => (editingId === asset.id) ? `
       <article class="asset-card" data-action="edit-asset" data-id="${asset.id}" style="cursor:pointer;">
         <div class="asset-preview">${asset.storage ? `<img src="/api/assets/${asset.id}/file" alt="" style="width:100%;height:auto;display:block;" />` : (asset.preview_svg || "")}</div>
-        <div class="asset-body" style="display:flex;flex-direction:column;gap:6px;">
+        <div class="asset-body" style="display:flex;flex-direction:column;gap:6px;position:relative;">
+          <button type="button" data-action="delete-asset" data-id="${asset.id}" style="position:absolute;top:0;right:0;background:none;border:none;cursor:pointer;font-size:1rem;color:#a32253;">✕</button>
           <input data-asset="${i}" data-field="name" value="${escapeHtml(asset.name)}" placeholder="Name" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
-          <input data-asset="${i}" data-field="kind" value="${escapeHtml(asset.kind)}" placeholder="Kind" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
-          <input data-asset="${i}" data-field="status" value="${escapeHtml(asset.status)}" placeholder="Status" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
+          <select data-asset="${i}" data-field="kind" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;">
+            ${["card deck","card","concept art","box art","board","player board","3d piece","icon set","icon","thematic art","other"].map(k => `<option value="${k}" ${asset.kind===k?"selected":""}>${k}</option>`).join("")}
+          </select>
           <input data-asset="${i}" data-field="folder" value="${escapeHtml(asset.folder || "")}" placeholder="Folder (optional)" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.85rem;" />
           <textarea data-asset="${i}" data-field="description" rows="2" style="padding:6px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:0.8rem;margin-bottom:8px;">${escapeHtml(asset.description)}</textarea>
         </div>
@@ -2380,6 +2391,26 @@
       else if (action === "asset-view") {
         state.assetView = event.target.dataset.view || "grid";
         renderProject();
+      } else if (action === "toggle-asset-menu") {
+        state.assetMenuOpen = !state.assetMenuOpen;
+        renderProject();
+      } else if (action === "new-file-asset") {
+        state.assetMenuOpen = false;
+        const input = document.getElementById("asset-file-input");
+        if (input) input.click();
+      } else if (action === "import-file-asset") {
+        state.assetMenuOpen = false;
+        const input = document.getElementById("asset-file-input");
+        if (input) input.click();
+      } else if (action === "new-folder-asset") {
+        state.assetMenuOpen = false;
+        const project = state.activeProject;
+        if (project) {
+          api(`/projects/${encodeURIComponent(project.id)}/assets/create`, { method: "POST", body: JSON.stringify({ name: "New folder", kind: "other", format: "Folder" }) })
+            .then(() => api(`/projects/${encodeURIComponent(project.id)}`))
+            .then(data => { state.activeProject = data.project; state.activeRuns = data.runs || []; renderProject(); })
+            .catch(e => toast(e.message));
+        }
       } else if (action === "new-asset") {
         const input = document.getElementById("asset-file-input");
         if (input) input.click();
@@ -2389,6 +2420,18 @@
       } else if (action === "cancel-asset-edit") {
         state.editingAsset = null;
         renderProject();
+      } else if (action === "delete-asset") {
+        const id = actionEl.dataset.id;
+        if (!confirm("Delete this asset?")) return;
+        api(`/assets/${id}`, { method: "DELETE" }).then(() => {
+          state.editingAsset = null;
+          return api(`/projects/${encodeURIComponent(state.activeProject.id)}`);
+        }).then(data => {
+          state.activeProject = data.project;
+          state.activeRuns = data.runs || [];
+          renderProject();
+          toast("Asset deleted.");
+        }).catch(e => toast(e.message));
       } else if (action === "save-asset") {
         const project = state.activeProject;
         const id = actionEl.dataset.id;
@@ -2525,6 +2568,13 @@
     document.addEventListener("submit", onSubmit);
     document.addEventListener("click", onClick);
     document.addEventListener("change", onChange);
+    document.addEventListener("click", (e) => {
+      if (state.activeTab !== "assets") return;
+      if (!e.target.closest(".asset-card") && !e.target.closest("[data-action='toggle-asset-menu']") && !e.target.closest("[data-action^='new-']")) {
+        if (state.editingAsset) { state.editingAsset = null; renderProject(); }
+        if (state.assetMenuOpen) { state.assetMenuOpen = false; renderProject(); }
+      }
+    });
     document.addEventListener("dragover", (e) => { if (state.activeTab === "assets") e.preventDefault(); });
     document.addEventListener("drop", (e) => {
       if (state.activeTab !== "assets") return;

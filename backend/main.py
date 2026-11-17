@@ -222,6 +222,34 @@ async def upload_project_asset(
     return {"asset": saved}
 
 
+@app.post("/api/projects/{project_id}/assets/create", status_code=201)
+async def create_asset_meta(project_id: str, payload: dict) -> dict:
+    project = store.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    import uuid
+
+    asset = {
+        "id": f"asset_{uuid.uuid4().hex[:10]}",
+        "project_id": project_id,
+        "name": payload.get("name") or "New asset",
+        "kind": payload.get("kind") or "Other",
+        "format": payload.get("format") or "BIN",
+        "status": "Draft",
+        "accent": project.get("accent", "#6C4CF1"),
+        "description": payload.get("description", ""),
+        "folder": payload.get("folder", ""),
+        "tags": payload.get("tags", []),
+        "storage": None,
+        "variants": [],
+        "metadata": {},
+        "references": [],
+        "provenance": {"source": "manual"},
+    }
+    saved = store.create_asset(project_id, asset)
+    return {"asset": saved}
+
+
 @app.get("/api/assets/{asset_id}")
 async def get_asset(asset_id: str) -> dict:
     asset = store.get_asset(asset_id)
