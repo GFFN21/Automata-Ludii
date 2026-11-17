@@ -168,6 +168,14 @@ def project_cover(project: dict, css_class: str = "project-cover") -> str:
 
 
 def asset_visual(asset, project: dict, css_class: str = "asset-svg") -> str:
+    if isinstance(asset, str):
+        # treat as asset id
+        from .storage import read_asset
+        record = read_asset(asset)
+        if isinstance(record, dict):
+            asset = record
+        else:
+            asset = {"name": asset, "kind": "Concept sheet", "accent": None}
     if not isinstance(asset, dict):
         asset = {"name": str(asset), "kind": "Concept sheet", "accent": None}
     accent = _color(asset.get("accent"), _color(project.get("accent"), "#6C4CF1"))

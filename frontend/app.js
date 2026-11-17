@@ -378,6 +378,10 @@
         await Promise.all([loadSettings(), refreshHealth()]);
         if (seq !== state.renderSeq) return;
         renderSettings();
+        detectLocalModels();
+        if (state.settings && state.settings.provider === "local") {
+          updateProviderFields("local");
+        }
         if (state.pendingScroll) {
           const target = state.pendingScroll;
           state.pendingScroll = "";
@@ -1606,6 +1610,18 @@
             </form>
           </div>
 
+          <div class="panel" id="local-models">
+            <span class="kicker accent">Local models</span>
+            <h2>Ollama detection</h2>
+            <p>Detect models served by a local Ollama instance and switch the studio to use one.</p>
+            <div id="local-model-list" class="muted" style="font-size:.75rem;margin:8px 0;">Checking…</div>
+            <div class="form-actions">
+              <button class="btn" type="button" data-action="detect-local">Detect local models</button>
+              <button class="btn primary" type="button" data-action="use-local">Use local model</button>
+            </div>
+            <div id="local-model-feedback"></div>
+          </div>
+
           <div class="panel" id="framework">
             <span class="kicker accent">Custom framework</span>
             <h2>${escapeHtml(framework.name || "Tablecraft Agent Runtime")}</h2>
@@ -1969,6 +1985,52 @@
     }
   }
 
+  async function detectLocalModels() {
+    const list = $("#local-model-list");
+    const feedback = $("#local-model-feedback");
+    if (list) list.textContent = "Checking…";
+    try {
+      const data = await api("/local/models");
+      if (data.available && data.models && data.models.length) {
+        if (list) list.innerHTML = data.models.map((m) => `<div>• ${escapeHtml(m)}</div>`).join("");
+        if (feedback) feedback.innerHTML = `<div class="inline-ok">Detected ${data.models.length} local model(s).</div>`;
+        state.localModels = data.models;
+        state.localBaseUrl = data.base_url;
+      } else {
+        if (list) list.textContent = "No local models found.";
+        if (feedback) feedback.innerHTML = `<div class="inline-error">${escapeHtml(data.error || "Ollama is not reachable on " + (data.base_url || "localhost:11434"))}</div>`;
+      }
+    } catch (e) {
+      if (list) list.textContent = "No local models found.";
+      if (feedback) feedback.innerHTML = `<div class="inline-error">${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  async function useLocalModel() {
+    const models = state.localModels || [];
+    if (!models.length) {
+      await detectLocalModels();
+    }
+    if (!(state.localModels || []).length) {
+      toast("No local models detected.");
+      return;
+    }
+    const model = state.localModels[0];
+    const base_url = state.localBaseUrl || "http://localhost:11434";
+    try {
+      const data = await api("/settings", {
+        method: "PUT",
+        body: JSON.stringify({ provider: "local", model, base_url, api_key: "" }),
+      });
+      state.settings = data.settings;
+      await refreshHealth();
+      renderSettings();
+      toast("Switched to local model: " + model);
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
   async function deleteKey() {
     const button = document.querySelector('[data-action="delete-key"]');
     setButtonBusy(button, true, "Removing…");
@@ -2010,15 +2072,45 @@
 
   /* --------------------------------- events -------------------------------- */
 
-  function updateProviderFields(providerId) {
+  async function loadLocalModels() {
+    try {
+      const data = await api("/chat/models");
+      const models = data.models || [];
+      state.localModels = models;
+      return { models, default: data.default };
+    } catch (e) {
+      state.localModels = [];
+      return { models: [], default: null };
+    }
+  }
+
+  async function updateProviderFields(providerId) {
     const provider = catalogProvider(providerId);
     if (!provider) return;
     const modelSelect = $("#model-select");
-    if (modelSelect) modelSelect.innerHTML = modelOptions(providerId, provider.models[0]);
     const baseUrl = $("#base-url");
-    if (baseUrl) baseUrl.value = provider.base_url || "";
     const keyInput = $("#api-key");
+    if (baseUrl) baseUrl.value = provider.base_url || "";
     if (keyInput) keyInput.placeholder = provider.key_label || "API key";
+
+    if (providerId === "local") {
+      const { models, default: def } = await loadLocalModels();
+      const current = (state.settings && state.settings.provider === "local" && state.settings.model) || def || (models[0] || "");
+      if (modelSelect) {
+        const opts = models.length ? models : provider.models;
+        if (current && !opts.includes(current)) opts.unshift(current);
+        modelSelect.innerHTML = opts.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+        if (current) modelSelect.value = current;
+      }
+      const status = $("#settings-feedback");
+      if (status) {
+        status.innerHTML = models.length
+          ? `<div class="inline-ok">Detected ${models.length} local model(s): ${escapeHtml(models.join(", "))}</div>`
+          : `<div class="inline-error">No local models detected. Is Ollama running on the base URL?</div>`;
+      }
+    } else if (modelSelect) {
+      modelSelect.innerHTML = modelOptions(providerId, provider.models[0]);
+    }
   }
 
   function onSubmit(event) {
@@ -2178,6 +2270,8 @@
       else if (action === "quick-playtest") quickPlaytest();
       else if (action === "copy-code") copyCode();
       else if (action === "test-connection") testConnection();
+      else if (action === "detect-local") detectLocalModels();
+      else if (action === "use-local") useLocalModel();
       else if (action === "delete-key") deleteKey();
       else if (action === "reset-demo") resetDemo();
       else if (action === "reload") window.location.reload();

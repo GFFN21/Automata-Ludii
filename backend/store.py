@@ -13,6 +13,7 @@ from .storage import read_asset, write_asset, delete_asset_files, data_dir, asse
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("TABLECRAFT_DATA_DIR", ROOT / ".data"))
 DB_PATH = DATA_DIR / "tablecraft.json"
+PROJECTS_DIR = DATA_DIR / "projects"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 
 PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
@@ -43,17 +44,37 @@ class Store:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         data_dir()
-        if not DB_PATH.exists():
-            self._write_db({"projects": [], "runs": {}})
-            db = self._read_db()
-            db["projects"] = seed_projects()
-            self._write_db(db)
-        # migrate legacy embedded assets to file-backed records
-        with self._lock:
-            db = self._read_db()
-            changed = self._migrate_db(db)
-            if changed:
-                self._write_db(db)
+        projects_dir()
+        # Migrate legacy monolithic tablecraft.json into per-project folders.
+        if DB_PATH.exists():
+            try:
+                db = self._read_db()
+                self._migrate_db(db)
+                for project in db.get("projects", []):
+                    ppath = project_path(project["id"])
+                    ppath.parent.mkdir(parents=True, exist_ok=True)
+                    with ppath.open("w", encoding="utf-8") as handle:
+                        json.dump(project, handle, ensure_ascii=False, indent=2)
+                    # runs
+                    runs = db.get("runs", {}).get(project["id"], [])
+                    rpath = runs_path(project["id"])
+                    with rpath.open("w", encoding="utf-8") as handle:
+                        json.dump(runs, handle, ensure_ascii=False, indent=2)
+                DB_PATH.rename(DB_PATH.with_suffix(".legacy.json"))
+            except Exception:
+                pass
+        # Seed if no projects exist.
+        if not any(projects_dir().iterdir()):
+            db = {"projects": seed_projects(), "runs": {}}
+            self._migrate_db(db)
+            for project in db.get("projects", []):
+                ppath = project_path(project["id"])
+                ppath.parent.mkdir(parents=True, exist_ok=True)
+                with ppath.open("w", encoding="utf-8") as handle:
+                    json.dump(project, handle, ensure_ascii=False, indent=2)
+                rpath = runs_path(project["id"])
+                with rpath.open("w", encoding="utf-8") as handle:
+                    json.dump([], handle, ensure_ascii=False, indent=2)
 
     def _read_db(self) -> dict[str, Any]:
         with DB_PATH.open("r", encoding="utf-8") as handle:
@@ -94,39 +115,49 @@ class Store:
 
     def list_projects(self) -> list[dict[str, Any]]:
         with self._lock:
-            projects = self._read_db()["projects"]
+            projects = []
+            for d in projects_dir().iterdir():
+                if d.is_dir():
+                    p = d / "project.json"
+                    if p.exists():
+                        with p.open("r", encoding="utf-8") as handle:
+                            projects.append(json.load(handle))
             return sorted(projects, key=lambda p: p.get("updated_at", ""), reverse=True)
 
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         with self._lock:
-            for project in self._read_db()["projects"]:
-                if project["id"] == project_id:
-                    return project
-            return None
+            p = project_path(project_id)
+            if not p.exists():
+                return None
+            with p.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
 
     def create_project(self, project: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            db = self._read_db()
-            used = {p["id"] for p in db["projects"]}
+            used = {p["id"] for p in self.list_projects()}
             base_id = project["id"]
             suffix = 2
             while project["id"] in used:
                 project["id"] = f"{base_id}-{suffix}"
                 suffix += 1
             project = self._normalize_project_assets(project["id"], dict(project))
-            db["projects"].append(project)
-            self._write_db(db)
+            ppath = project_path(project["id"])
+            ppath.parent.mkdir(parents=True, exist_ok=True)
+            with ppath.open("w", encoding="utf-8") as handle:
+                json.dump(project, handle, ensure_ascii=False, indent=2)
+            rpath = runs_path(project["id"])
+            with rpath.open("w", encoding="utf-8") as handle:
+                json.dump([], handle, ensure_ascii=False, indent=2)
             return project
 
     def delete_project(self, project_id: str) -> bool:
         with self._lock:
-            db = self._read_db()
-            before = len(db["projects"])
-            db["projects"] = [p for p in db["projects"] if p["id"] != project_id]
-            if len(db["projects"]) == before:
+            ppath = project_path(project_id)
+            if not ppath.exists():
                 return False
-            db.get("runs", {}).pop(project_id, None)
-            self._write_db(db)
+            import shutil
+
+            shutil.rmtree(ppath.parent, ignore_errors=True)
             return True
 
     def get_asset(self, asset_id: str) -> dict[str, Any] | None:
@@ -175,14 +206,19 @@ class Store:
             if not record:
                 return False
             # remove from any project
-            for project in self._read_db().get("projects", []):
+            for d in projects_dir().iterdir():
+                if not d.is_dir():
+                    continue
+                ppath = d / "project.json"
+                if not ppath.exists():
+                    continue
+                with ppath.open("r", encoding="utf-8") as handle:
+                    project = json.load(handle)
                 if asset_id in (project.get("assets") or []):
                     project["assets"] = [a for a in project["assets"] if a != asset_id]
-            db = self._read_db()
-            for project in db.get("projects", []):
-                if asset_id in (project.get("assets") or []):
-                    project["assets"] = [a for a in project["assets"] if a != asset_id]
-            self._write_db(db)
+                    project["updated_at"] = now_iso()
+                    with ppath.open("w", encoding="utf-8") as handle:
+                        json.dump(project, handle, ensure_ascii=False, indent=2)
             delete_asset_files(asset_id)
             return True
 
@@ -209,29 +245,38 @@ class Store:
 
     def update_project(self, project_id: str, project: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            db = self._read_db()
-            for index, current in enumerate(db["projects"]):
-                if current["id"] == project_id:
-                    project = self._normalize_project_assets(project_id, dict(project))
-                    project["updated_at"] = now_iso()
-                    db["projects"][index] = project
-                    self._write_db(db)
-                    return project
-            raise KeyError(project_id)
+            ppath = project_path(project_id)
+            if not ppath.exists():
+                raise KeyError(project_id)
+            project = self._normalize_project_assets(project_id, dict(project))
+            project["updated_at"] = now_iso()
+            ppath.parent.mkdir(parents=True, exist_ok=True)
+            with ppath.open("w", encoding="utf-8") as handle:
+                json.dump(project, handle, ensure_ascii=False, indent=2)
+            return project
 
     def add_run(self, project_id: str, run: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            db = self._read_db()
-            runs = db.setdefault("runs", {})
-            project_runs = runs.setdefault(project_id, [])
+            rpath = runs_path(project_id)
+            if rpath.exists():
+                with rpath.open("r", encoding="utf-8") as handle:
+                    project_runs = json.load(handle)
+            else:
+                project_runs = []
             project_runs.insert(0, run)
-            runs[project_id] = project_runs[:30]
-            self._write_db(db)
+            project_runs = project_runs[:30]
+            rpath.parent.mkdir(parents=True, exist_ok=True)
+            with rpath.open("w", encoding="utf-8") as handle:
+                json.dump(project_runs, handle, ensure_ascii=False, indent=2)
             return run
 
     def list_runs(self, project_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return self._read_db().get("runs", {}).get(project_id, [])
+            rpath = runs_path(project_id)
+            if not rpath.exists():
+                return []
+            with rpath.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
 
     def _read_settings(self) -> dict[str, Any]:
         if not SETTINGS_PATH.exists():
@@ -315,10 +360,42 @@ class Store:
 
     def reset_demo_data(self) -> list[dict[str, Any]]:
         with self._lock:
+            import shutil
+
+            if projects_dir().exists():
+                shutil.rmtree(projects_dir())
+            projects_dir().mkdir(parents=True, exist_ok=True)
             db = {"projects": seed_projects(), "runs": {}}
             self._migrate_db(db)
-            self._write_db(db)
+            for project in db.get("projects", []):
+                ppath = project_path(project["id"])
+                ppath.parent.mkdir(parents=True, exist_ok=True)
+                with ppath.open("w", encoding="utf-8") as handle:
+                    json.dump(project, handle, ensure_ascii=False, indent=2)
+                rpath = runs_path(project["id"])
+                with rpath.open("w", encoding="utf-8") as handle:
+                    json.dump([], handle, ensure_ascii=False, indent=2)
             return self.list_projects()
 
+
+def projects_dir() -> Path:
+    PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
+    return PROJECTS_DIR
+
+
+def project_path(project_id: str) -> Path:
+    import re
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", project_id or ""):
+        raise ValueError(f"Invalid project id: {project_id!r}")
+    return projects_dir() / project_id / "project.json"
+
+
+def runs_path(project_id: str) -> Path:
+    import re
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", project_id or ""):
+        raise ValueError(f"Invalid project id: {project_id!r}")
+    return projects_dir() / project_id / "runs.json"
 
 store = Store()

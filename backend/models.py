@@ -141,7 +141,7 @@ class Project(BaseModel):
     motif: Literal["sun", "wave", "flora", "orbit"]
     progress: dict[str, int]
     ruleset: Ruleset
-    assets: list[str] = Field(default_factory=list)
+    assets: list[Asset] = Field(default_factory=list)
     schema_version: int = 1
     code: list[CodeFile] = Field(default_factory=list)
     playtests: list[PlaytestReport] = Field(default_factory=list)

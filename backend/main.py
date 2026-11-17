@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import framework_manifest, run_agent
-from .models import NewProjectRequest, RunRequest
+from .models import NewProjectRequest, ProviderConfig, RunRequest
 from .naming import title_from_brief
 from .presenter import present_project, present_projects
 from .providers import chat as provider_chat, check_connection
@@ -351,22 +351,41 @@ def provider_catalog() -> list[dict]:
     ]
 
 
+@app.get("/api/local/models")
+async def local_models(base_url: str = "http://localhost:11434") -> dict:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            r = await client.get(f"{base_url.rstrip('/')}/api/tags")
+            r.raise_for_status()
+            models = [m.get("name") for m in r.json().get("models", []) if m.get("name")]
+            return {"available": True, "models": models, "default": models[0] if models else None, "base_url": base_url}
+    except Exception as exc:
+        return {"available": False, "models": [], "default": None, "base_url": base_url, "error": str(exc)}
+
+
 @app.get("/api/chat/models")
 async def chat_models() -> dict:
+    # Prefer a real local Ollama instance when available, regardless of saved provider.
+    import httpx
+
+    for base_url in {store.get_runtime_config().base_url, "http://localhost:11434", "http://127.0.0.1:11434"}:
+        if not base_url:
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                r = await client.get(f"{base_url.rstrip('/')}/api/tags")
+                r.raise_for_status()
+                models = [m.get("name") for m in r.json().get("models", []) if m.get("name")]
+                if models:
+                    return {"models": models, "default": models[0], "provider": "local", "base_url": base_url}
+        except Exception:
+            continue
     config = store.get_runtime_config()
     if config.provider == "local":
-        import httpx
-
-        try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                r = await client.get(f"{config.base_url.rstrip('/')}/api/tags")
-                r.raise_for_status()
-                models = [m.get("name") for m in r.json().get("models", [])]
-                return {"models": models, "default": config.model}
-        except Exception:
-            return {"models": [], "default": config.model}
-    # remote providers: just return configured model
-    return {"models": [config.model], "default": config.model}
+        return {"models": [], "default": config.model, "provider": "local", "base_url": config.base_url}
+    return {"models": [config.model], "default": config.model, "provider": config.provider, "base_url": config.base_url}
 
 
 def offline_chat_reply(messages: list[dict]) -> str:
@@ -391,18 +410,38 @@ def offline_chat_reply(messages: list[dict]) -> str:
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest) -> dict:
     config = store.get_runtime_config()
+    messages = [m.model_dump() for m in payload.messages]
+    # Try the configured provider first.
     try:
-        reply = await provider_chat(
-            config, [m.model_dump() for m in payload.messages], payload.model
-        )
+        reply = await provider_chat(config, messages, payload.model)
         if reply:
-            return {"model": payload.model or config.model, "content": reply, "offline": False}
+            return {"model": payload.model or config.model, "content": reply, "offline": False, "provider": config.provider}
     except Exception:
         pass
+    # Fall back to a real local Ollama instance if one is reachable.
+    import httpx
+
+    for base_url in ("http://localhost:11434", "http://127.0.0.1:11434", config.base_url):
+        if not base_url:
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                r = await client.get(f"{base_url.rstrip('/')}/api/tags")
+                r.raise_for_status()
+                models = [m.get("name") for m in r.json().get("models", []) if m.get("name")]
+            if not models:
+                continue
+            local_config = ProviderConfig(provider="local", model=models[0], base_url=base_url)
+            reply = await provider_chat(local_config, messages, payload.model if payload.model in models else None)
+            if reply:
+                return {"model": payload.model or models[0], "content": reply, "offline": False, "provider": "local"}
+        except Exception:
+            continue
     return {
         "model": "offline-demo",
-        "content": offline_chat_reply([m.model_dump() for m in payload.messages]),
+        "content": offline_chat_reply(messages),
         "offline": True,
+        "provider": "offline",
     }
 
 
