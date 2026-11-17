@@ -1052,7 +1052,6 @@
     return `
       <div class="summary-block">
         ${editing ? `
-          <div class="field"><label>Description (Markdown)</label><textarea id="edit-description" rows="8" style="font-family:ui-monospace,monospace;font-size:0.8rem;">${escapeHtml(project.description)}</textarea></div>
           <div class="field-row">
             <div class="field"><label>Genre</label><input id="edit-genre" value="${escapeHtml(project.genre)}" /></div>
             <div class="field"><label>Players</label><input id="edit-players" value="${escapeHtml(project.players)}" /></div>
@@ -1061,16 +1060,13 @@
             <div class="field"><label>Playtime</label><input id="edit-playtime" value="${escapeHtml(project.playtime)}" /></div>
             <div class="field"><label>Age</label><input id="edit-age" value="${escapeHtml(project.age)}" /></div>
           </div>
+          <div class="field"><label>Description (Markdown)</label><textarea id="edit-description" rows="8" style="font-family:ui-monospace,monospace;font-size:0.8rem;width:100%;resize:vertical;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'">${escapeHtml(project.description)}</textarea></div>
 
           <div class="form-actions" style="margin-top:10px;">
             <button class="btn primary small" type="button" data-action="save-summary">Save</button>
             <button class="btn small" type="button" data-action="cancel-edit" data-section="summary">Cancel</button>
           </div>
         ` : `
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;width:100%;">
-            <span class="kicker">README.md</span>
-            <button class="btn small" type="button" data-action="edit-section" data-section="summary" title="Edit" style="vertical-align:middle;">✎ Edit</button> <button class="btn small" type="button" data-action="ai-suggest" data-section="description" title="AI improve" style="vertical-align:middle;">✨ AI</button>
-          </div>
           <div style="margin-bottom:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
               <span class="kicker" style="display:block;">Tags</span>
@@ -1090,7 +1086,14 @@
               </div>
             `}
           </div>
-                      <div class="md-viewer">${markdown(project.description)}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;width:100%;">
+            <span class="kicker">README.md</span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn small" type="button" data-action="edit-section" data-section="summary" title="Edit" style="vertical-align:middle;">✎ Edit</button>
+              <button class="btn small" type="button" data-action="ai-suggest" data-section="description" title="AI improve" style="vertical-align:middle;">✨ AI</button>
+            </div>
+          </div>
+          <div class="md-viewer" style="margin-top:12px;">${markdown(project.description)}</div>
         `}
       </div>
 

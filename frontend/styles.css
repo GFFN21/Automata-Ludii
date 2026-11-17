@@ -747,7 +747,7 @@ button { font: inherit; cursor: pointer; }
 /* ---------- project detail (simplified) ---------- */
 
 .project-simple-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
   margin: 18px 0 22px; padding-bottom: 16px; border-bottom: 1px solid var(--line);
 }
 .project-simple-head h1 { font-size: clamp(2.2rem, 4vw, 3.4rem); line-height: 0.95; margin: 6px 0 8px; }
